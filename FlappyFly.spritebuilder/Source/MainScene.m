@@ -8,15 +8,19 @@
 
 #import "MainScene.h"
 
-static const CGFloat scrollSpeed = 80.0f;
+static const CGFloat distanceBetweenObstacles = 160.0f;
+static const CGFloat firstObstaclePosition    = 280.0f;
+static const CGFloat scrollSpeed              = 80.0f;
 
 @implementation MainScene {
 
-    CCSprite *_hero;
-    CCNode *_ground1;
-    CCNode *_ground2;
-    NSArray *_grounds;
-    CCPhysicsNode *_physicsNode;
+    CCSprite       * _hero;
+    CCNode         * _ground1;
+    CCNode         * _ground2;
+    NSArray        * _grounds;
+    NSMutableArray * _obstacles;
+    CCPhysicsNode  * _physicsNode;
+    
     NSTimeInterval _sinceTouch;
 }
 
@@ -25,6 +29,11 @@ static const CGFloat scrollSpeed = 80.0f;
     self.userInteractionEnabled = YES;
     
     _grounds = @[_ground1, _ground2];
+    
+    _obstacles = [NSMutableArray array];
+    [self spawnNewObstacle];
+    [self spawnNewObstacle];
+    [self spawnNewObstacle];
 }
 
 - (void)update:(CCTime)delta {
@@ -70,7 +79,51 @@ static const CGFloat scrollSpeed = 80.0f;
     if (_sinceTouch > 0.5f) {
         [_hero.physicsBody applyAngularImpulse:-4000.0f * delta];
     }
+    
+    [self removeOffScreenObstacle];
 }
+
+- (void)spawnNewObstacle {
+
+    CCNode *previousObstacle = [_obstacles lastObject];
+    CGFloat previousObstacleXPosition = previousObstacle.position.x;
+    if (!previousObstacle) {
+        
+        // this is the first obstacle
+        previousObstacleXPosition = firstObstaclePosition;
+    }
+    
+    CCNode *obstacle = [CCBReader load:@"Obstacle"];
+    obstacle.position = ccp(previousObstacleXPosition + distanceBetweenObstacles, 0);
+    [_physicsNode addChild:obstacle];
+    [_obstacles addObject:obstacle];
+}
+
+- (void)removeOffScreenObstacle {
+
+    NSMutableArray *offScreenObstacles = nil;
+    for (CCNode *obstacle in _obstacles) {
+        
+        CGPoint obstacleWorldPoint = [_physicsNode convertToWorldSpace:obstacle.position];
+        CGPoint obstacleScreenPoint = [self convertToNodeSpace:obstacleWorldPoint];
+        if (obstacleScreenPoint.x < -obstacle.contentSize.width) {
+            if (!offScreenObstacles) {
+                offScreenObstacles = [NSMutableArray array];
+            }
+            [offScreenObstacles addObject:obstacle];
+        }
+    }
+    
+    for (CCNode *obstacleToRemove in offScreenObstacles) {
+        [obstacleToRemove removeFromParent];
+        [_obstacles removeObject:obstacleToRemove];
+        
+        // for each removed obstacle, add a new one
+        [self spawnNewObstacle];
+    }
+}
+
+#pragma mark - Touch Delegate
 
 - (void)touchBegan:(UITouch *)touch withEvent:(UIEvent *)event {
 
