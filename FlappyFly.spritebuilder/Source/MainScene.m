@@ -9,9 +9,8 @@
 #import "MainScene.h"
 #import "Obstacle.h"
 
-static const CGFloat distanceBetweenObstacles = 160.0f;
-static const CGFloat firstObstaclePosition    = 280.0f;
-static const CGFloat scrollSpeed              = 80.0f;
+static const CGFloat distanceBetweenObstacles = 160.f;
+static const CGFloat firstObstaclePosition    = 280.f;
 
 typedef NS_ENUM(NSInteger, DrawingOrder) {
     DrawingOrderPipes,
@@ -27,7 +26,12 @@ typedef NS_ENUM(NSInteger, DrawingOrder) {
     NSArray        * _grounds;
     NSMutableArray * _obstacles;
     CCPhysicsNode  * _physicsNode;
-    
+    CCButton       * _restartButton;
+    CCLabelTTF     * _scoreLabel;
+
+    BOOL           _gameOver;
+    NSInteger      _points;
+    CGFloat        _scrollSpeed;
     NSTimeInterval _sinceTouch;
 }
 
@@ -35,13 +39,25 @@ typedef NS_ENUM(NSInteger, DrawingOrder) {
 
     self.userInteractionEnabled = YES;
     
+    _points = 0;
+    _scrollSpeed = 80.f;
+    
     _grounds = @[_ground1, _ground2];
     
+    // set default zorder
     for (CCNode *ground in _grounds) {
+        ground.physicsBody.collisionType = @"level";
         ground.zOrder = DrawingOrderGround;
     }
+    
+    // set the collision delegate
+    _physicsNode.collisionDelegate = self;
+    
+    // set hero properties
+    _hero.physicsBody.collisionType = @"hero";
     _hero.zOrder = DrawingOrderHero;
     
+    // add obstacles
     _obstacles = [NSMutableArray array];
     [self spawnNewObstacle];
     [self spawnNewObstacle];
@@ -50,9 +66,9 @@ typedef NS_ENUM(NSInteger, DrawingOrder) {
 
 - (void)update:(CCTime)delta {
 
-    _hero.position = CGPointMake(_hero.position.x + delta * scrollSpeed,
+    _hero.position = CGPointMake(_hero.position.x + delta * _scrollSpeed,
                                  _hero.position.y);
-    _physicsNode.position = CGPointMake(_physicsNode.position.x - delta * scrollSpeed,
+    _physicsNode.position = CGPointMake(_physicsNode.position.x - delta * _scrollSpeed,
                                         _physicsNode.position.y);
     
     for (CCNode *ground in _grounds) {
@@ -83,16 +99,36 @@ typedef NS_ENUM(NSInteger, DrawingOrder) {
     _hero.physicsBody.velocity = ccp(0, yVelocity);
     
     _sinceTouch += delta;
-    _hero.rotation = clampf(_hero.rotation, -30.0f, 90.0f);
+    _hero.rotation = clampf(_hero.rotation, -30.f, 90.f);
     if (_hero.physicsBody.allowsRotation) {
-        float angularVelocity = clampf(_hero.physicsBody.angularVelocity, -2.0f, 1.0f);
+        float angularVelocity = clampf(_hero.physicsBody.angularVelocity, -2.f, 1.f);
         _hero.physicsBody.angularVelocity = angularVelocity;
     }
     if (_sinceTouch > 0.5f) {
-        [_hero.physicsBody applyAngularImpulse:-4000.0f * delta];
+        [_hero.physicsBody applyAngularImpulse:-4000.f * delta];
     }
     
     [self removeOffScreenObstacle];
+}
+
+#pragma mark - Helper Method
+
+- (void)gameOver {
+
+    if (!_gameOver) {
+        
+        _scrollSpeed = 0.0f;
+        _gameOver = YES;
+        _restartButton.visible = YES;
+        _hero.rotation = 90.f;
+        _hero.physicsBody.allowsRotation = NO;
+        [_hero stopAllActions];
+        CCActionMoveBy *moveBy = [CCActionMoveBy actionWithDuration:0.2f position:ccp(-2, 2)];
+        CCActionInterval *reverseMovement = [moveBy reverse];
+        CCActionSequence *shakeSequense = [CCActionSequence actionWithArray:@[moveBy, reverseMovement]];
+        CCActionEaseBounce *bounce = [CCActionEaseBounce actionWithAction:shakeSequense];
+        [self runAction:bounce];
+    }
 }
 
 - (void)spawnNewObstacle {
@@ -137,13 +173,42 @@ typedef NS_ENUM(NSInteger, DrawingOrder) {
     }
 }
 
+- (void)restart {
+
+    CCScene *scene = [CCBReader loadAsScene:@"MainScene"];
+    [[CCDirector sharedDirector] replaceScene:scene];
+}
+
 #pragma mark - Touch Delegate
 
 - (void)touchBegan:(UITouch *)touch withEvent:(UIEvent *)event {
 
-    [_hero.physicsBody applyImpulse:ccp(0, 400.0)];
-    [_hero.physicsBody applyAngularImpulse:1000.0f];
-    _sinceTouch = 0.0f;
+    if (!_gameOver) {
+        
+        [_hero.physicsBody applyImpulse:ccp(0, 400.f)];
+        [_hero.physicsBody applyAngularImpulse:1000.f];
+        _sinceTouch = 0.f;
+    }
+}
+
+#pragma mark - Collision Delegate
+
+// hero collision with level
+- (BOOL)ccPhysicsCollisionBegin:(CCPhysicsCollisionPair *)pair hero:(CCNode *)hero level:(CCNode *)level {
+    
+    [self gameOver];
+    
+    return YES;
+}
+
+// hero collision with goal
+- (BOOL)ccPhysicsCollisionBegin:(CCPhysicsCollisionPair *)pair hero:(CCNode *)hero goal:(CCNode *)goal {
+
+    [goal removeFromParent];
+    _points ++;
+    _scoreLabel.string = [NSString stringWithFormat:@"%d",_points];
+    
+    return YES;
 }
 
 @end

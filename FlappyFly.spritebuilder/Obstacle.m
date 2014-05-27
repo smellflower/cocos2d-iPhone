@@ -29,6 +29,14 @@ static const CGFloat maximumYPositionTopPipe = maximumYPositionBottomPipe - pipe
     CCNode *_bottomPipe;
 }
 
+- (void)didLoadFromCCB {
+
+    _topPipe.physicsBody.collisionType = @"level";
+    _topPipe.physicsBody.sensor = FALSE;
+    _bottomPipe.physicsBody.collisionType = @"level";
+    _bottomPipe.physicsBody.sensor = FALSE;
+}
+
 - (void)setupRandomPosition {
 
     // value between 0.0f to 1.0f
